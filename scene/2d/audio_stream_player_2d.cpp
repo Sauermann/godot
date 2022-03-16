@@ -172,7 +172,7 @@ void AudioStreamPlayer2D::_update_panning() {
 			listener_in_global = listener->get_global_position();
 			relative_to_listener = global_pos - listener_in_global;
 		} else {
-			Transform2D to_listener = vp->get_global_canvas_transform() * vp->get_canvas_transform();
+			Transform2D to_listener = vp->get_viewport_transform() * vp->get_canvas_transform();
 			listener_in_global = to_listener.affine_inverse().xform(screen_size * 0.5);
 			relative_to_listener = to_listener.xform(global_pos) - screen_size * 0.5;
 		}

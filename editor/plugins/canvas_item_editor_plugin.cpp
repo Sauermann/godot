@@ -3678,7 +3678,7 @@ void CanvasItemEditor::_draw_viewport() {
 	transform = Transform2D();
 	transform.scale_basis(Size2(zoom, zoom));
 	transform.elements[2] = -view_offset * zoom;
-	EditorNode::get_singleton()->get_scene_root()->set_global_canvas_transform(transform);
+	EditorNode::get_singleton()->get_scene_root()->set_viewport_transform(transform);
 
 	// hide/show buttons depending on the selection
 	bool all_locked = true;
@@ -4614,7 +4614,7 @@ void CanvasItemEditor::_focus_selection(int p_op) {
 
 	if (p_op == VIEW_CENTER_TO_SELECTION) {
 		center = rect.get_center();
-		Vector2 offset = viewport->get_size() / 2 - EditorNode::get_singleton()->get_scene_root()->get_global_canvas_transform().xform(center);
+		Vector2 offset = viewport->get_size() / 2 - EditorNode::get_singleton()->get_scene_root()->get_viewport_transform().xform(center);
 		view_offset -= (offset / zoom).round();
 		update_viewport();
 

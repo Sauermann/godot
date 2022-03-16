@@ -216,7 +216,7 @@ private:
 
 	Transform2D canvas_transform_override;
 	Transform2D canvas_transform;
-	Transform2D global_canvas_transform;
+	Transform2D viewport_transform;
 	Transform2D stretch_transform;
 
 	Size2i size = Size2i(512, 512);
@@ -490,8 +490,8 @@ public:
 	void set_canvas_transform(const Transform2D &p_transform);
 	Transform2D get_canvas_transform() const;
 
-	void set_global_canvas_transform(const Transform2D &p_transform);
-	Transform2D get_global_canvas_transform() const;
+	void set_viewport_transform(const Transform2D &p_transform);
+	Transform2D get_viewport_transform() const;
 
 	Transform2D get_final_transform() const;
 

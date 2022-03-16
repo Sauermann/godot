@@ -923,19 +923,19 @@ Transform2D Viewport::get_canvas_transform() const {
 }
 
 void Viewport::_update_global_transform() {
-	Transform2D sxform = stretch_transform * global_canvas_transform;
+	Transform2D sxform = stretch_transform * viewport_transform;
 
 	RenderingServer::get_singleton()->viewport_set_global_canvas_transform(viewport, sxform);
 }
 
-void Viewport::set_global_canvas_transform(const Transform2D &p_transform) {
-	global_canvas_transform = p_transform;
+void Viewport::set_viewport_transform(const Transform2D &p_transform) {
+	viewport_transform = p_transform;
 
 	_update_global_transform();
 }
 
-Transform2D Viewport::get_global_canvas_transform() const {
-	return global_canvas_transform;
+Transform2D Viewport::get_viewport_transform() const {
+	return viewport_transform;
 }
 
 void Viewport::_camera_2d_set(Camera2D *p_camera_2d) {
@@ -1033,7 +1033,7 @@ Camera2D *Viewport::get_camera_2d() const {
 }
 
 Transform2D Viewport::get_final_transform() const {
-	return stretch_transform * global_canvas_transform;
+	return stretch_transform * viewport_transform;
 }
 
 void Viewport::_update_canvas_items(Node *p_node) {
@@ -3574,8 +3574,8 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_canvas_transform", "xform"), &Viewport::set_canvas_transform);
 	ClassDB::bind_method(D_METHOD("get_canvas_transform"), &Viewport::get_canvas_transform);
 
-	ClassDB::bind_method(D_METHOD("set_global_canvas_transform", "xform"), &Viewport::set_global_canvas_transform);
-	ClassDB::bind_method(D_METHOD("get_global_canvas_transform"), &Viewport::get_global_canvas_transform);
+	ClassDB::bind_method(D_METHOD("set_viewport_transform", "xform"), &Viewport::set_viewport_transform);
+	ClassDB::bind_method(D_METHOD("get_viewport_transform"), &Viewport::get_viewport_transform);
 	ClassDB::bind_method(D_METHOD("get_final_transform"), &Viewport::get_final_transform);
 
 	ClassDB::bind_method(D_METHOD("get_visible_rect"), &Viewport::get_visible_rect);
@@ -3750,7 +3750,7 @@ void Viewport::_bind_methods() {
 	ADD_PROPERTYI(PropertyInfo(Variant::INT, "shadow_atlas_quad_2", PROPERTY_HINT_ENUM, "Disabled,1 Shadow,4 Shadows,16 Shadows,64 Shadows,256 Shadows,1024 Shadows"), "set_shadow_atlas_quadrant_subdiv", "get_shadow_atlas_quadrant_subdiv", 2);
 	ADD_PROPERTYI(PropertyInfo(Variant::INT, "shadow_atlas_quad_3", PROPERTY_HINT_ENUM, "Disabled,1 Shadow,4 Shadows,16 Shadows,64 Shadows,256 Shadows,1024 Shadows"), "set_shadow_atlas_quadrant_subdiv", "get_shadow_atlas_quadrant_subdiv", 3);
 	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM2D, "canvas_transform", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_canvas_transform", "get_canvas_transform");
-	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM2D, "global_canvas_transform", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_global_canvas_transform", "get_global_canvas_transform");
+	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM2D, "viewport_transform", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_viewport_transform", "get_viewport_transform");
 
 	ADD_SIGNAL(MethodInfo("size_changed"));
 	ADD_SIGNAL(MethodInfo("gui_focus_changed", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "Control")));
