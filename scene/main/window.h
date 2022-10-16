@@ -108,6 +108,8 @@ private:
 	bool updating_child_controls = false;
 	bool clamp_to_embedder = false;
 
+	CanvasLayer *drag_canvas_layer = nullptr;
+
 	LayoutDirection layout_dir = LAYOUT_DIRECTION_INHERITED;
 
 	bool auto_translate = true;
@@ -263,6 +265,7 @@ public:
 	void child_controls_changed();
 
 	Window *get_parent_visible_window() const;
+	virtual Window *get_windowmanager_window() const override;
 	Viewport *get_parent_viewport() const;
 	void popup(const Rect2i &p_rect = Rect2i());
 	void popup_on_parent(const Rect2i &p_parent_rect);

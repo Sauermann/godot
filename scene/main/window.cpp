@@ -1113,6 +1113,13 @@ Window *Window::get_parent_visible_window() const {
 	return window;
 }
 
+Window *Window::get_windowmanager_window() const {
+	if (_get_embedder()) {
+		return _get_embedder()->get_windowmanager_window();
+	}
+	return const_cast<Window *>(this);
+}
+
 void Window::popup_on_parent(const Rect2i &p_parent_rect) {
 	ERR_FAIL_COND(!is_inside_tree());
 	ERR_FAIL_COND_MSG(window_id == DisplayServer::MAIN_WINDOW_ID, "Can't popup the main window.");

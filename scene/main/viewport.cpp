@@ -1451,15 +1451,15 @@ Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_
 	return nullptr;
 }
 
-bool Viewport::_gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_check) {
+bool Viewport::_gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_check, bool p_check_parents) {
 	// Attempt grab, try parent controls too.
 	CanvasItem *ci = p_at_control;
 	while (ci) {
 		Control *control = Object::cast_to<Control>(ci);
 		if (control) {
-			if (control->can_drop_data(p_at_pos, gui.drag_data)) {
+			if (control->can_drop_data(p_at_pos, draginfo.data)) {
 				if (!p_just_check) {
-					control->drop_data(p_at_pos, gui.drag_data);
+					control->drop_data(p_at_pos, draginfo.data);
 				}
 
 				return true;
@@ -1468,6 +1468,10 @@ bool Viewport::_gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_che
 			if (control->data.mouse_filter == Control::MOUSE_FILTER_STOP) {
 				break;
 			}
+		}
+
+		if (!p_check_parents) {
+			break;
 		}
 
 		p_at_pos = ci->get_transform().xform(p_at_pos);
@@ -1563,43 +1567,43 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				set_input_as_handled();
 			}
 
-			if (gui.drag_data.get_type() != Variant::NIL && mb->get_button_index() == MouseButton::LEFT) {
+			if (draginfo.data.get_type() != Variant::NIL && mb->get_button_index() == MouseButton::LEFT) {
 				// Alternate drop use (when using force_drag(), as proposed by #5342).
 				gui.drag_successful = false;
 				if (gui.mouse_focus) {
-					gui.drag_successful = _gui_drop(gui.mouse_focus, pos, false);
+					gui.drag_successful = _gui_drop(gui.mouse_focus, pos, false, true);
 				}
 
-				gui.drag_data = Variant();
-				gui.dragging = false;
+				draginfo.data = Variant();
+				draginfo.dragging = false;
 
 				Control *drag_preview = _gui_get_drag_preview();
 				if (drag_preview) {
 					memdelete(drag_preview);
-					gui.drag_preview_id = ObjectID();
+					draginfo.preview_id = ObjectID();
 				}
-				_propagate_viewport_notification(this, NOTIFICATION_DRAG_END);
+				get_tree()->get_root()->propagate_notification(NOTIFICATION_DRAG_END);
 				get_base_window()->update_mouse_cursor_shape();
 			}
 
 			_gui_cancel_tooltip();
 		} else {
-			if (gui.drag_data.get_type() != Variant::NIL && mb->get_button_index() == MouseButton::LEFT) {
+			if (draginfo.data.get_type() != Variant::NIL && mb->get_button_index() == MouseButton::LEFT) {
 				gui.drag_successful = false;
 				if (gui.drag_mouse_over) {
-					gui.drag_successful = _gui_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos, false);
+					gui.drag_successful = _gui_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos, false, true);
 				}
 
 				Control *drag_preview = _gui_get_drag_preview();
 				if (drag_preview) {
 					memdelete(drag_preview);
-					gui.drag_preview_id = ObjectID();
+					draginfo.preview_id = ObjectID();
 				}
 
-				gui.drag_data = Variant();
-				gui.dragging = false;
+				draginfo.data = Variant();
+				draginfo.dragging = false;
 				gui.drag_mouse_over = nullptr;
-				_propagate_viewport_notification(this, NOTIFICATION_DRAG_END);
+				get_tree()->get_root()->propagate_notification(NOTIFICATION_DRAG_END);
 				get_base_window()->update_mouse_cursor_shape();
 			}
 
@@ -1653,9 +1657,9 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 					while (ci) {
 						Control *control = Object::cast_to<Control>(ci);
 						if (control) {
-							gui.dragging = true;
-							gui.drag_data = control->get_drag_data(control->get_global_transform_with_canvas().affine_inverse().xform(mpos) - gui.drag_accum);
-							if (gui.drag_data.get_type() != Variant::NIL) {
+							draginfo.dragging = true;
+							draginfo.data = control->get_drag_data(control->get_global_transform_with_canvas().affine_inverse().xform(mpos) - gui.drag_accum);
+							if (draginfo.data.get_type() != Variant::NIL) {
 								gui.mouse_focus = nullptr;
 								gui.forced_mouse_focus = false;
 								gui.mouse_focus_mask = MouseButton::NONE;
@@ -1665,9 +1669,9 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 								if (drag_preview) {
 									ERR_PRINT("Don't set a drag preview and return null data. Preview was deleted and drag request ignored.");
 									memdelete(drag_preview);
-									gui.drag_preview_id = ObjectID();
+									draginfo.preview_id = ObjectID();
 								}
-								gui.dragging = false;
+								draginfo.dragging = false;
 							}
 
 							if (control->data.mouse_filter == Control::MOUSE_FILTER_STOP) {
@@ -1684,8 +1688,9 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				}
 
 				gui.drag_attempted = true;
-				if (gui.drag_data.get_type() != Variant::NIL) {
-					_propagate_viewport_notification(this, NOTIFICATION_DRAG_BEGIN);
+				if (draginfo.data.get_type() != Variant::NIL) {
+					get_tree()->get_root()->propagate_notification(NOTIFICATION_DRAG_BEGIN);
+					draginfo.start_base_window = get_base_window();
 				}
 			}
 		}
@@ -1797,104 +1802,155 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			}
 		}
 
-		if (gui.drag_data.get_type() != Variant::NIL) {
+		if (draginfo.data.get_type() != Variant::NIL) {
 			// Handle drag & drop.
 
 			Control *drag_preview = _gui_get_drag_preview();
-			if (drag_preview) {
-				drag_preview->set_position(mpos);
-			}
 
-			gui.drag_mouse_over = over;
+			Control *previous_drop_target = gui.drag_mouse_over;
+			gui.drag_mouse_over = nullptr;
 			gui.drag_mouse_over_pos = Vector2();
 
-			// Find the window this is above of.
-			// See if there is an embedder.
-			Viewport *embedder = nullptr;
+			// Find the window that is under the mouse cursor.
+			Window *embedder_window = nullptr;
 			Vector2 viewport_pos;
 
-			if (is_embedding_subwindows()) {
-				embedder = this;
-				viewport_pos = mpos;
-			} else {
-				// Not an embedder, but may be a subwindow of an embedder.
-				Window *w = Object::cast_to<Window>(this);
-				if (w) {
-					if (w->is_embedded()) {
-						embedder = w->_get_embedder();
-
-						Transform2D ai = (get_final_transform().affine_inverse() * _get_input_pre_xform()).affine_inverse();
-
-						viewport_pos = ai.xform(mpos) + w->get_position(); // To parent coords.
-					}
-				}
-			}
-
-			Viewport *viewport_under = nullptr;
-
-			if (embedder) {
-				// Use embedder logic.
-
-				for (int i = embedder->gui.sub_windows.size() - 1; i >= 0; i--) {
-					Window *sw = embedder->gui.sub_windows[i].window;
-					Rect2 swrect = Rect2i(sw->get_position(), sw->get_size());
-					if (!sw->get_flag(Window::FLAG_BORDERLESS)) {
-						int title_height = sw->get_theme_constant(SNAME("title_height"));
-						swrect.position.y -= title_height;
-						swrect.size.y += title_height;
-					}
-
-					if (swrect.has_point(viewport_pos)) {
-						viewport_under = sw;
-						viewport_pos -= sw->get_position();
-					}
-				}
-
-				if (!viewport_under) {
-					// Not in a subwindow, likely in embedder.
-					viewport_under = embedder;
+			if (get_tree()->get_root()->is_embedding_subwindows()) {
+				// Use embedder logic for calculating mouse position.
+				embedder_window = get_tree()->get_root();
+				viewport_pos = embedder_window->gui.last_mouse_pos;
+				if (drag_preview) {
+					drag_preview->set_position(viewport_pos);
 				}
 			} else {
-				// Use DisplayServer logic.
+				// Use DisplayServer logic for calculating mouse position.
 				Vector2i screen_mouse_pos = DisplayServer::get_singleton()->mouse_get_position();
-
 				DisplayServer::WindowID window_id = DisplayServer::get_singleton()->get_window_at_screen_position(screen_mouse_pos);
 
 				if (window_id != DisplayServer::INVALID_WINDOW_ID) {
 					ObjectID object_under = DisplayServer::get_singleton()->window_get_attached_instance_id(window_id);
 
 					if (object_under != ObjectID()) { // Fetch window.
-						Window *w = Object::cast_to<Window>(ObjectDB::get_instance(object_under));
-						if (w) {
-							viewport_under = w;
-							viewport_pos = screen_mouse_pos - w->get_position();
-						}
+						embedder_window = Object::cast_to<Window>(ObjectDB::get_instance(object_under));
 					}
+				}
+
+				if (!embedder_window) {
+					// Fallback to previously hovered Window.
+					embedder_window = Object::cast_to<Window>(drag_preview->get_viewport());
+				}
+
+				if (embedder_window) {
+					viewport_pos = (embedder_window->get_final_transform().affine_inverse() * embedder_window->_get_input_pre_xform()).xform(screen_mouse_pos - embedder_window->get_position());
+					if (drag_preview->get_viewport() != embedder_window) {
+						drag_preview->get_parent()->remove_child(drag_preview);
+						if (embedder_window->drag_canvas_layer == nullptr) {
+							// Create CanvasLayer for Drag and Drop preview.
+							embedder_window->drag_canvas_layer = memnew(CanvasLayer);
+							embedder_window->drag_canvas_layer->set_layer(DRAG_N_DROP_CANVAS_LAYER);
+							embedder_window->add_child(embedder_window->drag_canvas_layer);
+						}
+						embedder_window->drag_canvas_layer->add_child(drag_preview);
+					}
+					drag_preview->set_position(viewport_pos);
 				}
 			}
 
-			if (viewport_under) {
-				if (viewport_under != this) {
-					Transform2D ai = (viewport_under->get_final_transform().affine_inverse() * viewport_under->_get_input_pre_xform());
-					viewport_pos = ai.xform(viewport_pos);
-				}
-				// Find control under at position.
-				gui.drag_mouse_over = viewport_under->gui_find_control(viewport_pos);
-				if (gui.drag_mouse_over) {
-					Transform2D localizer = gui.drag_mouse_over->get_global_transform_with_canvas().affine_inverse();
-					gui.drag_mouse_over_pos = localizer.xform(viewport_pos);
+			Viewport *target_viewport = embedder_window;
+			while (!gui.drag_mouse_over) {
+				bool restart = false;
+				if (target_viewport->is_embedding_subwindows()) {
+					// Test for embedded Windows.
+					for (int i = target_viewport->gui.sub_windows.size() - 1; i >= 0; i--) {
+						Window *sw = target_viewport->gui.sub_windows[i].window;
+						Rect2 swrect = Rect2i(sw->get_position(), sw->get_size());
+						if (!sw->get_flag(Window::FLAG_BORDERLESS)) {
+							int title_height = sw->get_theme_constant(SNAME("title_height"));
+							swrect.position.y -= title_height;
+							swrect.size.y += title_height;
+						}
 
-					bool can_drop = _gui_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos, true);
-
-					if (!can_drop) {
-						ds_cursor_shape = DisplayServer::CURSOR_FORBIDDEN;
-					} else {
-						ds_cursor_shape = DisplayServer::CURSOR_CAN_DROP;
+						if (swrect.has_point(viewport_pos)) {
+							target_viewport = sw;
+							viewport_pos = (sw->get_final_transform().affine_inverse() * sw->_get_input_pre_xform()).xform(viewport_pos - sw->get_position());
+							restart = true;
+						}
 					}
 				}
 
+				if (restart) {
+					// Always check for embedded Windows before looking for Controls and SubViewports.
+					continue;
+				}
+
+				// Find Control while also looking for SubViewports.
+				CanvasItem *ci = target_viewport->gui_find_control(viewport_pos);
+				while (ci) {
+					Control *drag_over_control = Object::cast_to<Control>(ci);
+					if (drag_over_control) {
+						Vector2 control_pos = drag_over_control->get_global_transform_with_canvas().affine_inverse().xform(viewport_pos);
+
+						// First test, if Control is a Drop target.
+						bool can_drop = _gui_drop(drag_over_control, control_pos, true, false);
+						if (can_drop) {
+							gui.drag_mouse_over = drag_over_control;
+							gui.drag_mouse_over_pos = control_pos;
+							break;
+						} else {
+							// Test if a SubViewport is available.
+							SubViewportContainer *svc = Object::cast_to<SubViewportContainer>(drag_over_control);
+							if (svc) {
+								if (svc->is_stretch_enabled()) {
+									control_pos /= svc->get_stretch_shrink();
+								}
+
+								for (int i = 0; i < svc->get_child_count(); i++) {
+									SubViewport *c = Object::cast_to<SubViewport>(svc->get_child(i));
+									if (!c || c->is_input_disabled()) {
+										continue;
+									}
+									target_viewport = c;
+									viewport_pos = c->get_final_transform().affine_inverse().xform(control_pos);
+									restart = true;
+									break; // Take only the first available SubViewport into consideration.
+								}
+							}
+						}
+					}
+
+					if (restart) {
+						// SubViewport found: Stop checking parents.
+						break;
+					}
+
+					// Update variables for checking parent CanvasItem.
+					viewport_pos = ci->get_transform().xform(viewport_pos);
+					ci = ci->get_parent_item();
+				}
+
+				if (!ci) {
+					// No Drop target was found: End search.
+					break;
+				}
+			}
+
+			// Send mouse enter/exit notifications to Drop targets.
+			if (previous_drop_target != gui.drag_mouse_over) {
+				Window *start_base_window = draginfo.start_base_window;
+				if (gui.drag_mouse_over && gui.drag_mouse_over->get_viewport()->get_base_window() != start_base_window &&
+						(start_base_window == this || is_ancestor_of(gui.drag_mouse_over->get_viewport()->get_base_window()))) {
+					_gui_call_notification(gui.drag_mouse_over, Control::NOTIFICATION_MOUSE_ENTER);
+				}
+				if (previous_drop_target && previous_drop_target->get_viewport()->get_base_window() != start_base_window &&
+						(start_base_window == this || is_ancestor_of(previous_drop_target->get_viewport()->get_base_window()))) {
+					_gui_call_notification(previous_drop_target, Control::NOTIFICATION_MOUSE_EXIT);
+				}
+			}
+
+			if (gui.drag_mouse_over) {
+				ds_cursor_shape = DisplayServer::CURSOR_CAN_DROP;
 			} else {
-				gui.drag_mouse_over = nullptr;
+				ds_cursor_shape = DisplayServer::CURSOR_FORBIDDEN;
 			}
 		}
 
@@ -2103,42 +2159,49 @@ void Viewport::_gui_set_root_order_dirty() {
 void Viewport::_gui_force_drag(Control *p_base, const Variant &p_data, Control *p_control) {
 	ERR_FAIL_COND_MSG(p_data.get_type() == Variant::NIL, "Drag data must be a value.");
 
-	gui.dragging = true;
-	gui.drag_data = p_data;
+	draginfo.dragging = true;
+	draginfo.data = p_data;
 	gui.mouse_focus = nullptr;
 
 	if (p_control) {
-		_gui_set_drag_preview(p_base, p_control);
+		_gui_set_drag_preview(p_control);
 	}
-	_propagate_viewport_notification(this, NOTIFICATION_DRAG_BEGIN);
+	get_tree()->get_root()->propagate_notification(NOTIFICATION_DRAG_BEGIN);
+	draginfo.start_base_window = p_base->get_viewport()->get_base_window();
 }
 
-void Viewport::_gui_set_drag_preview(Control *p_base, Control *p_control) {
+void Viewport::_gui_set_drag_preview(Control *p_control) {
 	ERR_FAIL_NULL(p_control);
 	ERR_FAIL_COND(!Object::cast_to<Control>((Object *)p_control));
 	ERR_FAIL_COND(p_control->is_inside_tree());
 	ERR_FAIL_COND(p_control->get_parent() != nullptr);
 
+	Window *clv = get_windowmanager_window();
+	if (clv->drag_canvas_layer == nullptr) {
+		// Create CanvasLayer for Drag and Drop preview.
+		clv->drag_canvas_layer = memnew(CanvasLayer);
+		clv->drag_canvas_layer->set_layer(DRAG_N_DROP_CANVAS_LAYER);
+		clv->add_child(clv->drag_canvas_layer);
+	}
+
 	Control *drag_preview = _gui_get_drag_preview();
 	if (drag_preview) {
 		memdelete(drag_preview);
 	}
-	p_control->set_as_top_level(true);
-	p_control->set_position(gui.last_mouse_pos);
-	p_base->get_root_parent_control()->add_child(p_control); // Add as child of viewport.
-	p_control->move_to_front();
+	p_control->set_position(clv->gui.last_mouse_pos);
+	clv->drag_canvas_layer->add_child(p_control); // Add as child of Drag and Drop CanvasLayer.
 
-	gui.drag_preview_id = p_control->get_instance_id();
+	draginfo.preview_id = p_control->get_instance_id();
 }
 
 Control *Viewport::_gui_get_drag_preview() {
-	if (gui.drag_preview_id.is_null()) {
+	if (draginfo.preview_id.is_null()) {
 		return nullptr;
 	} else {
-		Control *drag_preview = Object::cast_to<Control>(ObjectDB::get_instance(gui.drag_preview_id));
+		Control *drag_preview = Object::cast_to<Control>(ObjectDB::get_instance(draginfo.preview_id));
 		if (!drag_preview) {
 			ERR_PRINT("Don't free the control set as drag preview.");
-			gui.drag_preview_id = ObjectID();
+			draginfo.preview_id = ObjectID();
 		}
 		return drag_preview;
 	}
@@ -2875,7 +2938,7 @@ bool Viewport::is_input_disabled() const {
 }
 
 Variant Viewport::gui_get_drag_data() const {
-	return gui.drag_data;
+	return draginfo.data;
 }
 
 PackedStringArray Viewport::get_configuration_warnings() const {
@@ -3035,7 +3098,7 @@ bool Viewport::is_snap_2d_vertices_to_pixel_enabled() const {
 }
 
 bool Viewport::gui_is_dragging() const {
-	return gui.dragging;
+	return draginfo.dragging;
 }
 
 bool Viewport::gui_is_drag_successful() const {
@@ -4020,6 +4083,13 @@ void Viewport::_validate_property(PropertyInfo &p_property) const {
 	}
 }
 
+Viewport::DragAndDrop Viewport::draginfo = {
+	false,
+	Variant(),
+	ObjectID(),
+	nullptr
+};
+
 Viewport::Viewport() {
 	world_2d = Ref<World2D>(memnew(World2D));
 
@@ -4155,6 +4225,14 @@ Transform2D SubViewport::get_screen_transform() const {
 		WARN_PRINT_ONCE("SubViewport is not a child of a SubViewportContainer. get_screen_transform doesn't return the actual screen position.");
 	}
 	return container_transform * Viewport::get_screen_transform();
+}
+
+Window *SubViewport::get_windowmanager_window() const {
+	SubViewportContainer *c = Object::cast_to<SubViewportContainer>(get_parent());
+	if (c && c->get_viewport()) {
+		return c->get_viewport()->get_windowmanager_window();
+	}
+	return nullptr;
 }
 
 void SubViewport::_notification(int p_what) {

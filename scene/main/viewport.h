@@ -194,7 +194,8 @@ public:
 	};
 
 	enum {
-		SUBWINDOW_CANVAS_LAYER = 1024
+		SUBWINDOW_CANVAS_LAYER = 1024,
+		DRAG_N_DROP_CANVAS_LAYER = 2048
 	};
 
 	enum VRSMode {
@@ -367,15 +368,12 @@ private:
 		Point2 last_mouse_pos;
 		Point2 drag_accum;
 		bool drag_attempted = false;
-		Variant drag_data;
-		ObjectID drag_preview_id;
 		Ref<SceneTreeTimer> tooltip_timer;
 		double tooltip_delay = 0.0;
 		Transform2D focus_inv_xform;
 		bool roots_order_dirty = false;
 		List<Control *> roots;
 		int canvas_sort_index = 0; //for sorting items with canvas as root
-		bool dragging = false;
 		bool drag_successful = false;
 		bool embed_subwindows_hint = false;
 
@@ -390,6 +388,14 @@ private:
 
 		Vector<SubWindow> sub_windows; // Don't obtain references or pointers to the elements, as their location can change.
 	} gui;
+
+	struct DragAndDrop {
+		bool dragging;
+		Variant data;
+		ObjectID preview_id;
+		Window *start_base_window;
+	};
+	static DragAndDrop draginfo;
 
 	DefaultCanvasItemTextureFilter default_canvas_item_texture_filter = DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR;
 	DefaultCanvasItemTextureRepeat default_canvas_item_texture_repeat = DEFAULT_CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
@@ -423,7 +429,7 @@ private:
 	void _gui_hide_control(Control *p_control);
 
 	void _gui_force_drag(Control *p_base, const Variant &p_data, Control *p_control);
-	void _gui_set_drag_preview(Control *p_base, Control *p_control);
+	void _gui_set_drag_preview(Control *p_control);
 	Control *_gui_get_drag_preview();
 
 	void _gui_remove_focus_for_window(Node *p_window);
@@ -434,7 +440,7 @@ private:
 	void _post_gui_grab_click_focus();
 	void _gui_accept_event();
 
-	bool _gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_check);
+	bool _gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_check, bool p_check_parents);
 
 	friend class AudioListener2D;
 	void _audio_listener_2d_set(AudioListener2D *p_listener);
@@ -636,6 +642,7 @@ public:
 
 	Viewport *get_parent_viewport() const;
 	Window *get_base_window() const;
+	virtual Window *get_windowmanager_window() const { return nullptr; }
 
 	void pass_mouse_focus_to(Viewport *p_viewport, Control *p_control);
 
@@ -766,6 +773,7 @@ public:
 	ClearMode get_clear_mode() const;
 
 	virtual Transform2D get_screen_transform() const override;
+	virtual Window *get_windowmanager_window() const override;
 
 	SubViewport();
 	~SubViewport();
