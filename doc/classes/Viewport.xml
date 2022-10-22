@@ -233,6 +233,9 @@
 		<member name="gui_embed_subwindows" type="bool" setter="set_embedding_subwindows" getter="is_embedding_subwindows" default="false">
 			If [code]true[/code], sub-windows (popups and dialogs) will be embedded inside application window as control-like nodes. If [code]false[/code], they will appear as separate windows handled by the operating system.
 		</member>
+		<member name="gui_focus_follow_mouse" type="bool" setter="set_focus_follow_mouse" getter="is_focus_follow_mouse_enabled" default="false">
+			If [code]false[/code], only mouse-clicks change the focus of embedded windows. If [code]true[/code], the embedded window, that is under the mouse, will automatically reveice focus.
+		</member>
 		<member name="gui_snap_controls_to_pixels" type="bool" setter="set_snap_controls_to_pixels" getter="is_snap_controls_to_pixels_enabled" default="true">
 			If [code]true[/code], the GUI controls on the viewport will lay pixel perfectly.
 		</member>

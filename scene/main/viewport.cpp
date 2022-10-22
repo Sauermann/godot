@@ -2615,14 +2615,18 @@ bool Viewport::_sub_windows_forward_input(const Ref<InputEvent> &p_event) {
 		return true; // Handled.
 	}
 	Ref<InputEventMouseButton> mb = p_event;
-	// If the event is a mouse button, we need to check whether another window was clicked.
+	Ref<InputEventMouseMotion> mm = p_event;
 
-	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT) {
-		bool click_on_window = false;
+	// If the event is a mouse button, we need to check whether another window was clicked.
+	// If focus follows mouse is enabled, we need to check whether another window was hovered.
+	bool left_mouse_down = mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT;
+	if (left_mouse_down || (is_focus_follow_mouse_enabled() && (mb.is_valid() || mm.is_valid()))) {
+		Vector2 event_position = mb.is_valid() ? mb->get_position() : mm->get_position();
+		bool focus_on_window = false;
 		for (int i = gui.sub_windows.size() - 1; i >= 0; i--) {
 			SubWindow sw = gui.sub_windows.write[i];
 
-			// Clicked inside window?
+			// Mouse position inside window?
 
 			Rect2i r = Rect2i(sw.window->get_position(), sw.window->get_size());
 
@@ -2633,67 +2637,75 @@ bool Viewport::_sub_windows_forward_input(const Ref<InputEvent> &p_event) {
 				title_bar.position.y -= title_height;
 				title_bar.size.y = title_height;
 
-				if (title_bar.has_point(mb->get_position())) {
-					click_on_window = true;
-
-					int close_h_ofs = sw.window->get_theme_constant(SNAME("close_h_offset"));
-					int close_v_ofs = sw.window->get_theme_constant(SNAME("close_v_offset"));
-					Ref<Texture2D> close_icon = sw.window->get_theme_icon(SNAME("close"));
-
-					Rect2 close_rect;
-					close_rect.position = Vector2(r.position.x + r.size.x - close_h_ofs, r.position.y - close_v_ofs);
-					close_rect.size = close_icon->get_size();
+				if (title_bar.has_point(event_position)) {
+					focus_on_window = true;
 
 					if (gui.subwindow_focused != sw.window) {
 						// Refocus.
 						_sub_window_grab_focus(sw.window);
 					}
+					if (left_mouse_down) {
+						// Closing and dragging Window.
+						int close_h_ofs = sw.window->get_theme_constant(SNAME("close_h_offset"));
+						int close_v_ofs = sw.window->get_theme_constant(SNAME("close_v_offset"));
+						Ref<Texture2D> close_icon = sw.window->get_theme_icon(SNAME("close"));
 
-					if (close_rect.has_point(mb->get_position())) {
-						gui.subwindow_drag = SUB_WINDOW_DRAG_CLOSE;
-						gui.subwindow_drag_close_inside = true; // Starts inside.
-						gui.subwindow_drag_close_rect = close_rect;
-					} else {
-						gui.subwindow_drag = SUB_WINDOW_DRAG_MOVE;
+						Rect2 close_rect;
+						close_rect.position = Vector2(r.position.x + r.size.x - close_h_ofs, r.position.y - close_v_ofs);
+						close_rect.size = close_icon->get_size();
+
+						if (close_rect.has_point(event_position)) {
+							gui.subwindow_drag = SUB_WINDOW_DRAG_CLOSE;
+							gui.subwindow_drag_close_inside = true; // Starts inside.
+							gui.subwindow_drag_close_rect = close_rect;
+						} else {
+							gui.subwindow_drag = SUB_WINDOW_DRAG_MOVE;
+						}
+
+						gui.subwindow_drag_from = event_position;
+						gui.subwindow_drag_pos = sw.window->get_position();
+
+						_sub_window_update(sw.window);
 					}
-
-					gui.subwindow_drag_from = mb->get_position();
-					gui.subwindow_drag_pos = sw.window->get_position();
-
-					_sub_window_update(sw.window);
 				} else {
-					gui.subwindow_resize_mode = _sub_window_get_resize_margin(sw.window, mb->get_position());
-					if (gui.subwindow_resize_mode != SUB_WINDOW_RESIZE_DISABLED) {
-						gui.subwindow_resize_from_rect = r;
-						gui.subwindow_drag_from = mb->get_position();
-						gui.subwindow_drag = SUB_WINDOW_DRAG_RESIZE;
-						click_on_window = true;
+					SubWindowResize resize_mode = _sub_window_get_resize_margin(sw.window, event_position);
+					if (resize_mode != SUB_WINDOW_RESIZE_DISABLED) {
+						focus_on_window = true;
+						if (gui.subwindow_focused != sw.window) {
+							// Refocus.
+							_sub_window_grab_focus(sw.window);
+						}
+						if (left_mouse_down) {
+							gui.subwindow_resize_mode = resize_mode;
+							gui.subwindow_resize_from_rect = r;
+							gui.subwindow_drag_from = event_position;
+							gui.subwindow_drag = SUB_WINDOW_DRAG_RESIZE;
+						}
 					}
 				}
 			}
-			if (!click_on_window && r.has_point(mb->get_position())) {
-				// Clicked, see if it needs to fetch focus.
+			if (!focus_on_window && r.has_point(event_position)) {
+				// Mouse position inside window, see if it needs to fetch focus.
 				if (gui.subwindow_focused != sw.window) {
 					// Refocus.
 					_sub_window_grab_focus(sw.window);
 				}
 
-				click_on_window = true;
+				focus_on_window = true;
 			}
 
-			if (click_on_window) {
+			if (focus_on_window) {
 				break;
 			}
 		}
 
-		if (!click_on_window && gui.subwindow_focused) {
+		if (!focus_on_window && gui.subwindow_focused) {
 			// No window found and clicked, remove focus.
 			_sub_window_grab_focus(nullptr);
 		}
 	}
 
 	if (gui.subwindow_focused) {
-		Ref<InputEventMouseMotion> mm = p_event;
 		if (mm.is_valid()) {
 			SubWindowResize resize = _sub_window_get_resize_margin(gui.subwindow_focused, mm->get_position());
 			if (resize != SUB_WINDOW_RESIZE_DISABLED) {
@@ -3205,6 +3217,14 @@ void Viewport::set_embedding_subwindows(bool p_embed) {
 
 bool Viewport::is_embedding_subwindows() const {
 	return gui.embed_subwindows_hint;
+}
+
+void Viewport::set_focus_follow_mouse(bool p_follow) {
+	gui.focus_follow_mouse = p_follow;
+}
+
+bool Viewport::is_focus_follow_mouse_enabled() const {
+	return gui.focus_follow_mouse;
 }
 
 void Viewport::pass_mouse_focus_to(Viewport *p_viewport, Control *p_control) {
@@ -3818,6 +3838,9 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_embedding_subwindows", "enable"), &Viewport::set_embedding_subwindows);
 	ClassDB::bind_method(D_METHOD("is_embedding_subwindows"), &Viewport::is_embedding_subwindows);
 
+	ClassDB::bind_method(D_METHOD("set_focus_follow_mouse", "enable"), &Viewport::set_focus_follow_mouse);
+	ClassDB::bind_method(D_METHOD("is_focus_follow_mouse_enabled"), &Viewport::is_focus_follow_mouse_enabled);
+
 	ClassDB::bind_method(D_METHOD("set_default_canvas_item_texture_repeat", "mode"), &Viewport::set_default_canvas_item_texture_repeat);
 	ClassDB::bind_method(D_METHOD("get_default_canvas_item_texture_repeat"), &Viewport::get_default_canvas_item_texture_repeat);
 
@@ -3911,6 +3934,7 @@ void Viewport::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gui_disable_input"), "set_disable_input", "is_input_disabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gui_snap_controls_to_pixels"), "set_snap_controls_to_pixels", "is_snap_controls_to_pixels_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gui_embed_subwindows"), "set_embedding_subwindows", "is_embedding_subwindows");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gui_focus_follow_mouse"), "set_focus_follow_mouse", "is_focus_follow_mouse_enabled");
 	ADD_GROUP("SDF", "sdf_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "sdf_oversize", PROPERTY_HINT_ENUM, "100%,120%,150%,200%"), "set_sdf_oversize", "get_sdf_oversize");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "sdf_scale", PROPERTY_HINT_ENUM, "100%,50%,25%"), "set_sdf_scale", "get_sdf_scale");

@@ -378,6 +378,7 @@ private:
 		bool dragging = false;
 		bool drag_successful = false;
 		bool embed_subwindows_hint = false;
+		bool focus_follow_mouse = false;
 
 		Window *subwindow_focused = nullptr;
 		SubWindowDrag subwindow_drag = SUB_WINDOW_DRAG_DISABLED;
@@ -633,6 +634,9 @@ public:
 
 	void set_embedding_subwindows(bool p_embed);
 	bool is_embedding_subwindows() const;
+
+	void set_focus_follow_mouse(bool p_follow);
+	bool is_focus_follow_mouse_enabled() const;
 
 	Viewport *get_parent_viewport() const;
 	Window *get_base_window() const;
