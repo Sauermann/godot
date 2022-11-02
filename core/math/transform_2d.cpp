@@ -47,6 +47,7 @@ Transform2D Transform2D::inverse() const {
 
 void Transform2D::affine_invert() {
 	real_t det = basis_determinant();
+	CRASH_COND(Math::is_zero_approx(det));
 #ifdef MATH_CHECKS
 	ERR_FAIL_COND(det == 0);
 #endif

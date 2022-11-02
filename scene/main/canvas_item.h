@@ -191,7 +191,7 @@ public:
 	virtual bool _edit_use_rect() const { return false; }; // MAYBE REPLACE BY A _edit_get_editmode()
 	virtual void _edit_set_rect(const Rect2 &p_rect) {}
 	virtual Rect2 _edit_get_rect() const { return Rect2(0, 0, 0, 0); };
-	virtual Size2 _edit_get_minimum_size() const { return Size2(-1, -1); }; // LOOKS WEIRD
+	virtual Size2 _edit_get_minimum_size() const { return Size2(0, 0); };
 
 	// Used to set a pivot
 	virtual bool _edit_use_pivot() const { return false; };
@@ -284,6 +284,7 @@ public:
 
 	virtual Transform2D get_global_transform() const;
 	virtual Transform2D get_global_transform_with_canvas() const;
+	virtual Transform2D get_parent_transform_to_viewport() const;
 	virtual Transform2D get_screen_transform() const;
 
 	CanvasItem *get_top_level() const;
