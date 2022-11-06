@@ -71,6 +71,7 @@ public:
 	virtual bool _edit_use_rotation() const override;
 
 	virtual void _edit_set_rect(const Rect2 &p_edit_rect) override;
+	virtual void _edit_set_rect2(const Rect2 &p_edit_rect) override;
 #endif
 
 	void set_position(const Point2 &p_pos);

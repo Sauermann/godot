@@ -373,6 +373,7 @@ public:
 	virtual Size2 _edit_get_scale() const override;
 
 	virtual void _edit_set_rect(const Rect2 &p_edit_rect) override;
+	virtual void _edit_set_rect2(const Rect2 &p_edit_rect) override;
 	virtual Rect2 _edit_get_rect() const override;
 	virtual bool _edit_use_rect() const override;
 

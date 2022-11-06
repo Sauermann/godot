@@ -1728,11 +1728,12 @@ bool CanvasItemEditor::_gui_input_resize(const Ref<InputEvent> &p_event) {
 			bool uniform = m->is_shift_pressed();
 			bool symmetric = m->is_alt_pressed();
 
-			Rect2 local_rect = ci->_edit_get_rect();
+			Transform2D ci_t = ci->get_transform();
+			Rect2 local_rect = ci_t.xform(ci->_edit_get_rect());
 			Point2 current_begin = local_rect.get_position();
 			Point2 current_end = local_rect.get_position() + local_rect.get_size();
-			Point2 max_begin = (symmetric) ? (current_begin + current_end - ci->_edit_get_minimum_size()) / 2.0 : current_end - ci->_edit_get_minimum_size();
-			Point2 min_end = (symmetric) ? (current_begin + current_end + ci->_edit_get_minimum_size()) / 2.0 : current_begin + ci->_edit_get_minimum_size();
+			Point2 max_begin = (symmetric) ? (current_begin + current_end) / 2.0 : current_end;
+			Point2 min_end = (symmetric) ? (current_begin + current_end) / 2.0 : current_begin;
 			Point2 center = (current_begin + current_end) / 2.0;
 			drag_to = transform.affine_inverse().xform(m->get_position());
 			print_line("CC ", current_begin, " ", current_end, " MM ", max_begin, " ", min_end, " DD ", drag_from, " ", drag_to);
@@ -1740,8 +1741,9 @@ bool CanvasItemEditor::_gui_input_resize(const Ref<InputEvent> &p_event) {
 			Point2 drag_begin = current_begin;
 			Point2 drag_end = current_end;
 
-			Transform2D xform = ci->get_global_transform_with_canvas();
+			Transform2D xform = ci->get_parent_transform_to_viewport();
 			if (xform.is_invertible()) {
+				print_line("snap");
 				drag_begin = snap_point(xform.xform(current_begin) + (drag_to - drag_from), SNAP_NODE_ANCHORS | SNAP_NODE_PARENT | SNAP_OTHER_NODES | SNAP_GRID | SNAP_PIXEL, 0, ci);
 				drag_end = snap_point(xform.xform(current_end) + (drag_to - drag_from), SNAP_NODE_ANCHORS | SNAP_NODE_PARENT | SNAP_OTHER_NODES | SNAP_GRID | SNAP_PIXEL, 0, ci);
 				drag_begin = xform.affine_inverse().xform(drag_begin);
@@ -1773,7 +1775,7 @@ bool CanvasItemEditor::_gui_input_resize(const Ref<InputEvent> &p_event) {
 
 			// Uniform resize
 			if (uniform) {
-				real_t aspect = local_rect.get_size().y / local_rect.get_size().x;
+				real_t aspect = local_rect.get_size().y / local_rect.get_size().x; // TODO disallow handlepoints for 0 values
 				if (drag_type == DRAG_LEFT || drag_type == DRAG_RIGHT) {
 					current_end.y = current_begin.y + aspect * (current_end.x - current_begin.x);
 				} else if (drag_type == DRAG_TOP || drag_type == DRAG_BOTTOM) {
@@ -1809,7 +1811,12 @@ bool CanvasItemEditor::_gui_input_resize(const Ref<InputEvent> &p_event) {
 				}
 			}
 			print_line("R ", Rect2(current_begin, current_end - current_begin));
-			ci->_edit_set_rect(Rect2(current_begin, current_end - current_begin));
+			if (Object::cast_to<Node2D>(ci)) {
+				ci->_edit_set_rect2(Rect2(current_begin, current_end - current_begin));
+			} else {
+				// Control: use previous algo
+				ci->_edit_set_rect(ci_t.affine_inverse().xform(Rect2(current_begin, current_end - current_begin)));
+			}
 			return true;
 		}
 

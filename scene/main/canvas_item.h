@@ -190,6 +190,7 @@ public:
 	// Used to resize/move the node
 	virtual bool _edit_use_rect() const { return false; }; // MAYBE REPLACE BY A _edit_get_editmode()
 	virtual void _edit_set_rect(const Rect2 &p_rect) {}
+	virtual void _edit_set_rect2(const Rect2 &p_rect) {}
 	virtual Rect2 _edit_get_rect() const { return Rect2(0, 0, 0, 0); };
 	virtual Size2 _edit_get_minimum_size() const { return Size2(0, 0); };
 

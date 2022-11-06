@@ -109,6 +109,44 @@ void Node2D::_edit_set_rect(const Rect2 &p_edit_rect) {
 	_update_transform();
 }
 #endif
+void Node2D::_edit_set_rect2(const Rect2 &p_edit_rect) {
+	ERR_FAIL_COND(!_edit_use_rect());
+
+	Rect2 r = _edit_get_rect();
+
+	Vector2 zero_offset;
+	Size2 new_scale(1, 1);
+
+	if (r.size.x != 0) {
+		zero_offset.x = -r.position.x / r.size.x;
+		new_scale.x = p_edit_rect.size.x / r.size.x;
+	}
+
+	if (r.size.y != 0) {
+		zero_offset.y = -r.position.y / r.size.y;
+		new_scale.y = p_edit_rect.size.y / r.size.y;
+	}
+
+	Point2 new_pos = p_edit_rect.position + p_edit_rect.size * zero_offset;
+
+	Transform2D postxf;
+	postxf.set_rotation_scale_and_skew(rotation, new_scale, skew);
+	//postxf = postxf.affine_inverse();
+	Rect2 er;
+	Rect2 er2 = postxf.xform(p_edit_rect);
+	er.position = postxf.xform(p_edit_rect.position);
+	er.size = postxf.xform(p_edit_rect.size);
+	print_line("ER: ", er, er2);
+
+//	Transform2D postxf;
+//	postxf.set_rotation_scale_and_skew(rotation, scale, skew);
+//	new_pos = postxf.xform(new_pos);
+
+	position = new_pos;
+	scale = new_scale;
+	print_line("scale: ", scale);
+	_update_transform();
+}
 
 void Node2D::_update_xform_values() {
 	position = transform.columns[2];
@@ -161,12 +199,14 @@ void Node2D::set_scale(const Size2 &p_scale) {
 	}
 	scale = p_scale;
 	// Avoid having 0 scale values, can lead to errors in physics and rendering.
+#if 0
 	if (Math::is_zero_approx(scale.x)) {
 		scale.x = CMP_EPSILON;
 	}
 	if (Math::is_zero_approx(scale.y)) {
 		scale.y = CMP_EPSILON;
 	}
+#endif // 0
 	_update_transform();
 }
 
