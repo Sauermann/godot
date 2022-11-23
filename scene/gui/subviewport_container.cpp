@@ -60,7 +60,6 @@ void SubViewportContainer::set_stretch(bool p_enable) {
 	stretch = p_enable;
 	recalc_force_viewport_sizes();
 	update_minimum_size();
-	queue_sort();
 	queue_redraw();
 }
 
@@ -98,14 +97,6 @@ void SubViewportContainer::recalc_force_viewport_sizes() {
 
 int SubViewportContainer::get_stretch_shrink() const {
 	return shrink;
-}
-
-Vector<int> SubViewportContainer::get_allowed_size_flags_horizontal() const {
-	return Vector<int>();
-}
-
-Vector<int> SubViewportContainer::get_allowed_size_flags_vertical() const {
-	return Vector<int>();
 }
 
 void SubViewportContainer::_notification(int p_what) {

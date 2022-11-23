@@ -31,10 +31,10 @@
 #ifndef SUBVIEWPORT_CONTAINER_H
 #define SUBVIEWPORT_CONTAINER_H
 
-#include "scene/gui/container.h"
+#include "scene/gui/control.h"
 
-class SubViewportContainer : public Container {
-	GDCLASS(SubViewportContainer, Container);
+class SubViewportContainer : public Control {
+	GDCLASS(SubViewportContainer, Control);
 
 	bool stretch = false;
 	int shrink = 1;
@@ -60,9 +60,6 @@ public:
 	void recalc_force_viewport_sizes();
 
 	virtual Size2 get_minimum_size() const override;
-
-	virtual Vector<int> get_allowed_size_flags_horizontal() const override;
-	virtual Vector<int> get_allowed_size_flags_vertical() const override;
 
 	PackedStringArray get_configuration_warnings() const override;
 
