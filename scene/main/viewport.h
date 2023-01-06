@@ -354,8 +354,6 @@ private:
 	Ref<Texture2D> vrs_texture;
 
 	struct GUI {
-		// info used when this is a window
-
 		bool forced_mouse_focus = false; //used for menu buttons
 		bool mouse_in_viewport = true;
 		bool key_event_accepted = false;
@@ -366,6 +364,8 @@ private:
 		BitField<MouseButtonMask> mouse_focus_mask;
 		Control *key_focus = nullptr;
 		Control *mouse_over = nullptr;
+		Window *subwindow_over = nullptr; // mouse_over and subwindow_over are mutually exclusive. At all times at least one of them is nullptr.
+		Window *windowmanager_window_over = nullptr; // Only used in root Viewport.
 		Control *drag_mouse_over = nullptr;
 		Vector2 drag_mouse_over_pos;
 		Control *tooltip_control = nullptr;
@@ -473,6 +473,9 @@ private:
 	bool _sub_windows_forward_input(const Ref<InputEvent> &p_event);
 	SubWindowResize _sub_window_get_resize_margin(Window *p_subwindow, const Point2 &p_point);
 
+	void _update_mouse_over();
+	void _update_mouse_over(Vector2 p_pos);
+
 	virtual bool _can_consume_input_events() const { return true; }
 	uint64_t event_count = 0;
 
@@ -484,6 +487,8 @@ protected:
 	Size2i _get_size() const;
 	Size2i _get_size_2d_override() const;
 	bool _is_size_allocated() const;
+
+	void _mouse_leave_viewport();
 
 	void _notification(int p_what);
 	void _process_picking();

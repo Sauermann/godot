@@ -675,16 +675,24 @@ void Window::_event_callback(DisplayServer::WindowEvent p_event) {
 	switch (p_event) {
 		case DisplayServer::WINDOW_EVENT_MOUSE_ENTER: {
 			_propagate_window_notification(this, NOTIFICATION_WM_MOUSE_ENTER);
-			emit_signal(SNAME("mouse_entered"));
+			Window *root = get_tree()->get_root();
+#ifdef DEBUG_ENABLED
+			ERR_FAIL_COND_MSG(root->gui.windowmanager_window_over, "Entering a window while a window is hovered should never happen.");
+#endif // DEBUG_ENABLED
+			root->gui.windowmanager_window_over = this;
 			notification(NOTIFICATION_VP_MOUSE_ENTER);
 			if (DisplayServer::get_singleton()->has_feature(DisplayServer::FEATURE_CURSOR_SHAPE)) {
 				DisplayServer::get_singleton()->cursor_set_shape(DisplayServer::CURSOR_ARROW); //restore cursor shape
 			}
 		} break;
 		case DisplayServer::WINDOW_EVENT_MOUSE_EXIT: {
-			notification(NOTIFICATION_VP_MOUSE_EXIT);
+			Window *root = get_tree()->get_root();
+#ifdef DEBUG_ENABLED
+			ERR_FAIL_NULL_MSG(root->gui.windowmanager_window_over, "Exiting a window, while no window is hovered should never happen.");
+#endif // DEBUG_ENABLED
+			root->gui.windowmanager_window_over->_mouse_leave_viewport();
+			root->gui.windowmanager_window_over = nullptr;
 			_propagate_window_notification(this, NOTIFICATION_WM_MOUSE_EXIT);
-			emit_signal(SNAME("mouse_exited"));
 		} break;
 		case DisplayServer::WINDOW_EVENT_FOCUS_IN: {
 			focused = true;
@@ -1273,6 +1281,14 @@ void Window::_notification(int p_what) {
 			}
 
 			RS::get_singleton()->viewport_set_active(get_viewport_rid(), false);
+		} break;
+
+		case NOTIFICATION_VP_MOUSE_ENTER: {
+			emit_signal(SceneStringNames::get_singleton()->mouse_entered);
+		} break;
+
+		case NOTIFICATION_VP_MOUSE_EXIT: {
+			emit_signal(SceneStringNames::get_singleton()->mouse_exited);
 		} break;
 	}
 }

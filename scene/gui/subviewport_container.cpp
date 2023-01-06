@@ -146,14 +146,6 @@ void SubViewportContainer::_notification(int p_what) {
 				}
 			}
 		} break;
-
-		case NOTIFICATION_MOUSE_ENTER: {
-			_notify_viewports(NOTIFICATION_VP_MOUSE_ENTER);
-		} break;
-
-		case NOTIFICATION_MOUSE_EXIT: {
-			_notify_viewports(NOTIFICATION_VP_MOUSE_EXIT);
-		} break;
 	}
 }
 
