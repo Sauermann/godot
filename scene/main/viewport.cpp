@@ -1223,14 +1223,16 @@ Ref<World2D> Viewport::find_world_2d() const {
 	}
 }
 
-void Viewport::_propagate_viewport_notification(Node *p_node, int p_what) {
+void Viewport::_propagate_drag_notification(Node *p_node, int p_what) {
+	// Send notification to p_node and all children and descendant nodes of p_node, except to SubViewports which are not children of a SubViewportContainer.
 	p_node->notification(p_what);
+	bool is_svc = Object::cast_to<SubViewportContainer>(p_node);
 	for (int i = 0; i < p_node->get_child_count(); i++) {
 		Node *c = p_node->get_child(i);
-		if (Object::cast_to<Viewport>(c)) {
+		if (!is_svc && Object::cast_to<SubViewport>(c)) {
 			continue;
 		}
-		_propagate_viewport_notification(c, p_what);
+		Viewport::_propagate_drag_notification(c, p_what);
 	}
 }
 
@@ -1685,7 +1687,7 @@ Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_
 }
 
 bool Viewport::_gui_drop(Control *p_at_control, Point2 p_at_pos, bool p_just_check) {
-	// Attempt grab, try parent controls too.
+	// Attempt drop, try parent controls too.
 	CanvasItem *ci = p_at_control;
 	while (ci) {
 		Control *control = Object::cast_to<Control>(ci);
@@ -1795,13 +1797,13 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 			if (gui.dragging && mb->get_button_index() == MouseButton::LEFT) {
 				// Alternate drop use (when using force_drag(), as proposed by #5342).
-				_perform_drop(gui.mouse_focus, pos);
+				_perform_drop(gui.mouse_focus);
 			}
 
 			_gui_cancel_tooltip();
 		} else {
 			if (gui.dragging && mb->get_button_index() == MouseButton::LEFT) {
-				_perform_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos);
+				_perform_drop(gui.drag_mouse_over);
 			}
 
 			gui.mouse_focus_mask.clear_flag(mouse_button_to_mask(mb->get_button_index())); // Remove from mask.
@@ -1857,6 +1859,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 								gui.mouse_focus = nullptr;
 								gui.forced_mouse_focus = false;
 								gui.mouse_focus_mask.clear();
+								get_tree()->get_root()->gui.global_dragging = true;
 								break;
 							} else {
 								Control *drag_preview = _gui_get_drag_preview();
@@ -1883,7 +1886,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 				gui.drag_attempted = true;
 				if (gui.dragging) {
-					_propagate_viewport_notification(this, NOTIFICATION_DRAG_BEGIN);
+					Viewport::_propagate_drag_notification(get_tree()->get_root(), NOTIFICATION_DRAG_BEGIN);
 				}
 			}
 		}
@@ -1984,105 +1987,29 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 		}
 
 		if (gui.dragging) {
-			// Handle drag & drop.
+			// Handle drag & drop. This happens in the viewport, where dragging started.
 
 			Control *drag_preview = _gui_get_drag_preview();
 			if (drag_preview) {
 				drag_preview->set_position(mpos);
 			}
 
-			gui.drag_mouse_over = over;
-			gui.drag_mouse_over_pos = Vector2();
-
-			// Find the window this is above of.
-			// See if there is an embedder.
-			Viewport *embedder = nullptr;
-			Vector2 viewport_pos;
-
-			if (is_embedding_subwindows()) {
-				embedder = this;
-				viewport_pos = mpos;
-			} else {
-				// Not an embedder, but may be a subwindow of an embedder.
-				Window *w = Object::cast_to<Window>(this);
-				if (w) {
-					if (w->is_embedded()) {
-						embedder = w->get_embedder();
-
-						viewport_pos = get_final_transform().xform(mpos) + w->get_position(); // To parent coords.
-					}
-				}
-			}
-
-			Viewport *viewport_under = nullptr;
-
-			if (embedder) {
-				// Use embedder logic.
-
-				for (int i = embedder->gui.sub_windows.size() - 1; i >= 0; i--) {
-					Window *sw = embedder->gui.sub_windows[i].window;
-					Rect2 swrect = Rect2i(sw->get_position(), sw->get_size());
-					if (!sw->get_flag(Window::FLAG_BORDERLESS)) {
-						int title_height = sw->get_theme_constant(SNAME("title_height"));
-						swrect.position.y -= title_height;
-						swrect.size.y += title_height;
-					}
-
-					if (swrect.has_point(viewport_pos)) {
-						viewport_under = sw;
-						viewport_pos -= sw->get_position();
-					}
+			gui.drag_mouse_over = get_tree()->get_root()->gui.target_control;
+			if (gui.drag_mouse_over) {
+				if (!_gui_drop(gui.drag_mouse_over, gui.drag_mouse_over->get_local_mouse_position(), true)) {
+					gui.drag_mouse_over = nullptr;
 				}
 
-				if (!viewport_under) {
-					// Not in a subwindow, likely in embedder.
-					viewport_under = embedder;
-				}
-			} else {
-				// Use DisplayServer logic.
-				Vector2i screen_mouse_pos = DisplayServer::get_singleton()->mouse_get_position();
-
-				DisplayServer::WindowID window_id = DisplayServer::get_singleton()->get_window_at_screen_position(screen_mouse_pos);
-
-				if (window_id != DisplayServer::INVALID_WINDOW_ID) {
-					ObjectID object_under = DisplayServer::get_singleton()->window_get_attached_instance_id(window_id);
-
-					if (object_under != ObjectID()) { // Fetch window.
-						Window *w = Object::cast_to<Window>(ObjectDB::get_instance(object_under));
-						if (w) {
-							viewport_under = w;
-							viewport_pos = screen_mouse_pos - w->get_position();
-						}
-					}
-				}
-			}
-
-			if (viewport_under) {
-				if (viewport_under != this) {
-					Transform2D ai = viewport_under->get_final_transform().affine_inverse();
-					viewport_pos = ai.xform(viewport_pos);
-				}
-				// Find control under at position.
-				gui.drag_mouse_over = viewport_under->gui_find_control(viewport_pos);
 				if (gui.drag_mouse_over) {
-					Transform2D localizer = gui.drag_mouse_over->get_global_transform_with_canvas().affine_inverse();
-					gui.drag_mouse_over_pos = localizer.xform(viewport_pos);
-
-					bool can_drop = _gui_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos, true);
-
-					if (!can_drop) {
-						ds_cursor_shape = DisplayServer::CURSOR_FORBIDDEN;
-					} else {
-						ds_cursor_shape = DisplayServer::CURSOR_CAN_DROP;
-					}
+					ds_cursor_shape = DisplayServer::CURSOR_CAN_DROP;
+				} else {
+					ds_cursor_shape = DisplayServer::CURSOR_FORBIDDEN;
 				}
-
-			} else {
-				gui.drag_mouse_over = nullptr;
 			}
 		}
 
-		if (DisplayServer::get_singleton()->has_feature(DisplayServer::FEATURE_CURSOR_SHAPE)) {
+		if (DisplayServer::get_singleton()->has_feature(DisplayServer::FEATURE_CURSOR_SHAPE) && (!get_tree()->get_root()->gui.global_dragging || gui.dragging)) {
+			// If dragging is active, then set cursor shape only from Viewport where dragging started.
 			DisplayServer::get_singleton()->cursor_set_shape(ds_cursor_shape);
 		}
 	}
@@ -2270,10 +2197,10 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 	}
 }
 
-void Viewport::_perform_drop(Control *p_control, Point2 p_pos) {
+void Viewport::_perform_drop(Control *p_control) {
 	// Without any arguments, simply cancel Drag and Drop.
 	if (p_control) {
-		gui.drag_successful = _gui_drop(p_control, p_pos, false);
+		gui.drag_successful = _gui_drop(p_control, p_control->get_local_mouse_position(), false);
 	} else {
 		gui.drag_successful = false;
 	}
@@ -2286,8 +2213,9 @@ void Viewport::_perform_drop(Control *p_control, Point2 p_pos) {
 
 	gui.drag_data = Variant();
 	gui.dragging = false;
+	get_tree()->get_root()->gui.global_dragging = false;
 	gui.drag_mouse_over = nullptr;
-	_propagate_viewport_notification(this, NOTIFICATION_DRAG_END);
+	Viewport::_propagate_drag_notification(get_tree()->get_root(), NOTIFICATION_DRAG_END);
 	// Display the new cursor shape instantly.
 	update_mouse_cursor_state();
 }
@@ -2317,13 +2245,14 @@ void Viewport::_gui_force_drag(Control *p_base, const Variant &p_data, Control *
 	ERR_FAIL_COND_MSG(p_data.get_type() == Variant::NIL, "Drag data must be a value.");
 
 	gui.dragging = true;
+	get_tree()->get_root()->gui.global_dragging = true;
 	gui.drag_data = p_data;
 	gui.mouse_focus = nullptr;
 
 	if (p_control) {
 		_gui_set_drag_preview(p_base, p_control);
 	}
-	_propagate_viewport_notification(this, NOTIFICATION_DRAG_BEGIN);
+	Viewport::_propagate_drag_notification(get_tree()->get_root(), NOTIFICATION_DRAG_BEGIN);
 }
 
 void Viewport::_gui_set_drag_preview(Control *p_base, Control *p_control) {
@@ -2380,6 +2309,7 @@ void Viewport::_gui_hide_control(Control *p_control) {
 	}
 	if (gui.drag_mouse_over == p_control) {
 		gui.drag_mouse_over = nullptr;
+		// TODO: drag_mouse_over can contain nodes from other Viewports. It is likely necessary to adjust this behavior.
 	}
 	if (gui.tooltip_control == p_control) {
 		_gui_cancel_tooltip();
@@ -2403,6 +2333,7 @@ void Viewport::_gui_remove_control(Control *p_control) {
 	}
 	if (gui.drag_mouse_over == p_control) {
 		gui.drag_mouse_over = nullptr;
+		// TODO: drag_mouse_over can contain nodes from other Viewports. It is likely necessary to adjust this behavior.
 	}
 	if (gui.tooltip_control == p_control) {
 		gui.tooltip_control = nullptr;
@@ -2962,6 +2893,7 @@ void Viewport::_update_mouse_over() {
 }
 
 void Viewport::_update_mouse_over(Vector2 p_pos) {
+	gui.last_mouse_pos = p_pos; // Necessary, because mouse cursor can be over Viewports that are not reached by the InputEvent.
 	// Look for embedded windows at mouse position.
 	if (is_embedding_subwindows()) {
 		for (int i = gui.sub_windows.size() - 1; i >= 0; i--) {
@@ -3016,6 +2948,9 @@ void Viewport::_update_mouse_over(Vector2 p_pos) {
 
 	// Look for Controls at mouse position.
 	Control *over = gui_find_control(p_pos);
+	if (get_tree() && get_tree()->get_root()) {
+		get_tree()->get_root()->gui.target_control = over;
+	}
 	bool notify_embedded_viewports = false;
 	if (over != gui.mouse_over) {
 		if (gui.mouse_over) {
@@ -3081,6 +3016,9 @@ void Viewport::_drop_mouse_over() {
 	}
 	if (gui.mouse_over->is_inside_tree()) {
 		gui.mouse_over->notification(Control::NOTIFICATION_MOUSE_EXIT);
+	}
+	if (get_tree() && get_tree()->get_root() && get_tree()->get_root()->gui.target_control == gui.mouse_over) {
+		get_tree()->get_root()->gui.target_control = nullptr;
 	}
 	gui.mouse_over = nullptr;
 }

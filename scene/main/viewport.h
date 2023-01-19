@@ -289,7 +289,7 @@ private:
 
 	bool disable_3d = false;
 
-	void _propagate_viewport_notification(Node *p_node, int p_what);
+	static void _propagate_drag_notification(Node *p_node, int p_what);
 
 	void _update_global_transform();
 
@@ -367,7 +367,6 @@ private:
 		Window *subwindow_over = nullptr; // mouse_over and subwindow_over are mutually exclusive. At all times at least one of them is nullptr.
 		Window *windowmanager_window_over = nullptr; // Only used in root Viewport.
 		Control *drag_mouse_over = nullptr;
-		Vector2 drag_mouse_over_pos;
 		Control *tooltip_control = nullptr;
 		Window *tooltip_popup = nullptr;
 		Label *tooltip_label = nullptr;
@@ -375,7 +374,7 @@ private:
 		Point2 last_mouse_pos;
 		Point2 drag_accum;
 		bool drag_attempted = false;
-		Variant drag_data;
+		Variant drag_data; // Only used in Root-Viewport.
 		ObjectID drag_preview_id;
 		Ref<SceneTreeTimer> tooltip_timer;
 		double tooltip_delay = 0.0;
@@ -383,8 +382,10 @@ private:
 		List<Control *> roots;
 		HashSet<ObjectID> canvas_parents_with_dirty_order;
 		int canvas_sort_index = 0; //for sorting items with canvas as root
-		bool dragging = false;
+		bool dragging = false; // Is true in the viewport, in which dragging started, while dragging is active.
+		bool global_dragging = false; // Is true while dragging is active. Only used in Root-Viewport.
 		bool drag_successful = false;
+		Control *target_control; // Control that the mouse is over in the innermost nested Viewport. Only used in Root-Viewport.
 		bool embed_subwindows_hint = false;
 
 		Window *subwindow_focused = nullptr;
@@ -411,7 +412,7 @@ private:
 	Control *_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_global, const Transform2D &p_xform);
 
 	void _gui_input_event(Ref<InputEvent> p_event);
-	void _perform_drop(Control *p_control = nullptr, Point2 p_pos = Point2());
+	void _perform_drop(Control *p_control = nullptr);
 	void _gui_cleanup_internal_state(Ref<InputEvent> p_event);
 
 	void _push_unhandled_input_internal(const Ref<InputEvent> &p_event);
