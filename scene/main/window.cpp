@@ -2091,13 +2091,15 @@ bool Window::is_auto_translating() const {
 	return auto_translate;
 }
 
-Transform2D Window::get_screen_transform() const {
-	Transform2D embedder_transform;
+Transform2D Window::get_screen_transform(bool p_absolute_position) const {
+	Transform2D xform;
 	if (_get_embedder()) {
-		embedder_transform.translate_local(get_position());
-		embedder_transform = _get_embedder()->get_screen_transform() * embedder_transform;
+		xform.translate_local(get_position());
+		xform = _get_embedder()->get_screen_transform(p_absolute_position) * xform;
+	} else if (p_absolute_position) {
+		xform.translate_local(get_position());
 	}
-	return embedder_transform * Viewport::get_screen_transform();
+	return xform * Viewport::get_screen_transform(p_absolute_position);
 }
 
 void Window::_bind_methods() {

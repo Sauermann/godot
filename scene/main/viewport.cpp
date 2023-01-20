@@ -1138,7 +1138,12 @@ Ref<InputEvent> Viewport::_make_input_local(const Ref<InputEvent> &ev) {
 }
 
 Vector2 Viewport::get_mouse_position() const {
-	return gui.last_mouse_pos;
+	if (!DisplayServer::get_singleton()->has_feature(DisplayServer::FEATURE_SUBWINDOWS) || get_tree()->get_root()->is_embedding_subwindows()) {
+		return get_screen_transform().affine_inverse().xform(Input::get_singleton()->get_mouse_position());
+	} else {
+		// In the case of multiple native Windows, the screen coordinates have to be fetched from the DisplayServer.
+		return get_screen_transform(true).affine_inverse().xform(DisplayServer::get_singleton()->mouse_get_position());
+	}
 }
 
 void Viewport::warp_mouse(const Vector2 &p_position) {
@@ -3244,7 +3249,7 @@ Viewport::SDFScale Viewport::get_sdf_scale() const {
 	return sdf_scale;
 }
 
-Transform2D Viewport::get_screen_transform() const {
+Transform2D Viewport::get_screen_transform(bool p_absolute_position) const {
 	return _get_input_pre_xform().affine_inverse() * get_final_transform();
 }
 
@@ -3753,7 +3758,7 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_global_canvas_transform", "xform"), &Viewport::set_global_canvas_transform);
 	ClassDB::bind_method(D_METHOD("get_global_canvas_transform"), &Viewport::get_global_canvas_transform);
 	ClassDB::bind_method(D_METHOD("get_final_transform"), &Viewport::get_final_transform);
-	ClassDB::bind_method(D_METHOD("get_screen_transform"), &Viewport::get_screen_transform);
+	ClassDB::bind_method(D_METHOD("get_screen_transform", "absolute"), &Viewport::get_screen_transform, DEFVAL(false));
 
 	ClassDB::bind_method(D_METHOD("get_visible_rect"), &Viewport::get_visible_rect);
 	ClassDB::bind_method(D_METHOD("set_transparent_background", "enable"), &Viewport::set_transparent_background);
@@ -4174,18 +4179,18 @@ Transform2D SubViewport::_stretch_transform() {
 	return transform;
 }
 
-Transform2D SubViewport::get_screen_transform() const {
+Transform2D SubViewport::get_screen_transform(bool p_absolute_position) const {
 	Transform2D container_transform;
 	SubViewportContainer *c = Object::cast_to<SubViewportContainer>(get_parent());
 	if (c) {
 		if (c->is_stretch_enabled()) {
 			container_transform.scale(Vector2(c->get_stretch_shrink(), c->get_stretch_shrink()));
 		}
-		container_transform = c->get_viewport()->get_screen_transform() * c->get_global_transform_with_canvas() * container_transform;
+		container_transform = c->get_viewport()->get_screen_transform(p_absolute_position) * c->get_global_transform_with_canvas() * container_transform;
 	} else {
 		WARN_PRINT_ONCE("SubViewport is not a child of a SubViewportContainer. get_screen_transform doesn't return the actual screen position.");
 	}
-	return container_transform * Viewport::get_screen_transform();
+	return container_transform * Viewport::get_screen_transform(p_absolute_position);
 }
 
 void SubViewport::_notification(int p_what) {

@@ -648,7 +648,7 @@ public:
 	void set_canvas_cull_mask_bit(uint32_t p_layer, bool p_enable);
 	bool get_canvas_cull_mask_bit(uint32_t p_layer) const;
 
-	virtual Transform2D get_screen_transform() const;
+	virtual Transform2D get_screen_transform(bool p_absolute_position = false) const;
 
 #ifndef _3D_DISABLED
 	bool use_xr = false;
@@ -774,7 +774,7 @@ public:
 	void set_clear_mode(ClearMode p_mode);
 	ClearMode get_clear_mode() const;
 
-	virtual Transform2D get_screen_transform() const override;
+	virtual Transform2D get_screen_transform(bool p_absolute_position = false) const override;
 
 	SubViewport();
 	~SubViewport();

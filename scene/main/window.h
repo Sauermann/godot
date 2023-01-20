@@ -370,7 +370,7 @@ public:
 
 	//
 
-	virtual Transform2D get_screen_transform() const override;
+	virtual Transform2D get_screen_transform(bool p_absolute_position = false) const override;
 
 	Rect2i get_parent_rect() const;
 	virtual DisplayServer::WindowID get_window_id() const override;

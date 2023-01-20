@@ -80,8 +80,10 @@
 		</method>
 		<method name="get_screen_transform" qualifiers="const">
 			<return type="Transform2D" />
+			<param index="0" name="absolute" type="bool" default="false" />
 			<description>
 				Returns the transform from the Viewport's coordinates to the screen coordinates of the containing window manager window.
+				If [param absolute] is [code]true[/code], returns the transform to absolute screen coordinates, which includes the position of the window manager window in the transform.
 			</description>
 		</method>
 		<method name="get_texture" qualifiers="const">
