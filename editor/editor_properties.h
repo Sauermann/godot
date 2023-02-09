@@ -532,7 +532,7 @@ protected:
 
 public:
 	virtual void update_property() override;
-	void setup(int p_min, int p_max, bool p_link = false, const String &p_suffix = String());
+	void setup(int p_min, int p_max, bool p_link = false, bool p_allow_greater = true, bool p_allow_lesser = true, const String &p_suffix = String());
 	EditorPropertyVector2i(bool p_force_wide = false);
 };
 

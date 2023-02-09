@@ -2148,13 +2148,13 @@ void EditorPropertyVector2i::_notification(int p_what) {
 	}
 }
 
-void EditorPropertyVector2i::setup(int p_min, int p_max, bool p_link, const String &p_suffix) {
+void EditorPropertyVector2i::setup(int p_min, int p_max, bool p_link, bool p_allow_greater, bool p_allow_lesser, const String &p_suffix) {
 	for (int i = 0; i < 2; i++) {
 		spin[i]->set_min(p_min);
 		spin[i]->set_max(p_max);
 		spin[i]->set_step(1);
-		spin[i]->set_allow_greater(true);
-		spin[i]->set_allow_lesser(true);
+		spin[i]->set_allow_greater(p_allow_greater);
+		spin[i]->set_allow_lesser(p_allow_lesser);
 		spin[i]->set_suffix(p_suffix);
 	}
 
@@ -4384,7 +4384,7 @@ EditorProperty *EditorInspectorDefaultPlugin::get_editor_for_property(Object *p_
 		case Variant::VECTOR2I: {
 			EditorPropertyVector2i *editor = memnew(EditorPropertyVector2i(p_wide));
 			EditorPropertyRangeHint hint = _parse_range_hint(p_hint, p_hint_text, 1);
-			editor->setup(hint.min, hint.max, p_hint == PROPERTY_HINT_LINK, hint.suffix);
+			editor->setup(hint.min, hint.max, p_hint == PROPERTY_HINT_LINK, hint.or_greater, hint.or_less, hint.suffix);
 			return editor;
 
 		} break;
