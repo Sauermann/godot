@@ -1898,8 +1898,6 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			over = gui_find_control(mpos);
 		}
 
-		DisplayServer::CursorShape ds_cursor_shape = (DisplayServer::CursorShape)Input::get_singleton()->get_default_cursor_shape();
-
 		if (over) {
 			Transform2D localizer = over->get_global_transform_with_canvas().affine_inverse();
 			Size2 pos = localizer.xform(mpos);
@@ -1950,32 +1948,6 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 			mm->set_position(pos);
 
-			Control::CursorShape cursor_shape = Control::CURSOR_ARROW;
-			{
-				Control *c = over;
-				Vector2 cpos = pos;
-				while (c) {
-					if (!gui.mouse_focus_mask.is_empty() || c->has_point(cpos)) {
-						cursor_shape = c->get_cursor_shape(cpos);
-					} else {
-						cursor_shape = Control::CURSOR_ARROW;
-					}
-					cpos = c->get_transform().xform(cpos);
-					if (cursor_shape != Control::CURSOR_ARROW) {
-						break;
-					}
-					if (c->data.mouse_filter == Control::MOUSE_FILTER_STOP) {
-						break;
-					}
-					if (c->is_set_as_top_level()) {
-						break;
-					}
-					c = c->get_parent_control();
-				}
-			}
-
-			ds_cursor_shape = (DisplayServer::CursorShape)cursor_shape;
-
 			bool stopped = false;
 			if (over && over->can_process()) {
 				stopped = _gui_call_input(over, mm);
@@ -1999,18 +1971,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				if (!_gui_drop(gui.drag_mouse_over, gui.drag_mouse_over->get_local_mouse_position(), true)) {
 					gui.drag_mouse_over = nullptr;
 				}
-
-				if (gui.drag_mouse_over) {
-					ds_cursor_shape = DisplayServer::CURSOR_CAN_DROP;
-				} else {
-					ds_cursor_shape = DisplayServer::CURSOR_FORBIDDEN;
-				}
 			}
-		}
-
-		if (DisplayServer::get_singleton()->has_feature(DisplayServer::FEATURE_CURSOR_SHAPE) && (!get_tree()->get_root()->gui.global_dragging || gui.dragging)) {
-			// If dragging is active, then set cursor shape only from Viewport where dragging started.
-			DisplayServer::get_singleton()->cursor_set_shape(ds_cursor_shape);
 		}
 	}
 
@@ -2892,6 +2853,51 @@ void Viewport::_update_mouse_over() {
 	receiving_window->_update_mouse_over(pos);
 }
 
+void Viewport::_update_cursor_shape() {
+	DisplayServer::CursorShape ds_cursor_shape = (DisplayServer::CursorShape)Input::get_singleton()->get_default_cursor_shape();
+	Control *target = get_tree()->get_root()->gui.target_control;
+	if (!target) {
+		DisplayServer::get_singleton()->cursor_set_shape(ds_cursor_shape);
+		return;
+	}
+
+	Viewport *vp = target->get_viewport();
+	Window *root = get_tree()->get_root();
+	if (root->gui.global_dragging) {
+		if (vp->_gui_drop(target, target->get_local_mouse_position(), true)) {
+			target = nullptr;
+		}
+		if (target) {
+			ds_cursor_shape = DisplayServer::CURSOR_CAN_DROP;
+		} else {
+			ds_cursor_shape = DisplayServer::CURSOR_FORBIDDEN;
+		}
+	} else {
+		Control::CursorShape cursor_shape = Control::CURSOR_ARROW;
+		Control *c = target;
+		Vector2 cpos = target->get_local_mouse_position();
+		while (c) {
+			if (!gui.mouse_focus_mask.is_empty() || c->has_point(cpos)) {
+				cursor_shape = c->get_cursor_shape(cpos);
+			} else {
+				cursor_shape = Control::CURSOR_ARROW;
+			}
+			cpos = c->get_transform().xform(cpos);
+			if (cursor_shape != Control::CURSOR_ARROW) {
+				break;
+			}
+			if (c->data.mouse_filter == Control::MOUSE_FILTER_STOP) {
+				break;
+			}
+			if (c->is_set_as_top_level()) {
+				break;
+			}
+			c = c->get_parent_control();
+		}
+	}
+	DisplayServer::get_singleton()->cursor_set_shape(ds_cursor_shape);
+}
+
 void Viewport::_update_mouse_over(Vector2 p_pos) {
 	gui.last_mouse_pos = p_pos; // Necessary, because mouse cursor can be over Viewports that are not reached by the InputEvent.
 	// Look for embedded windows at mouse position.
@@ -3625,11 +3631,17 @@ Transform2D Viewport::get_screen_transform_internal(bool p_absolute_position) co
 }
 
 void Viewport::update_mouse_cursor_state() {
-	// Updates need to happen in Window, because SubViewportContainers might be hidden behind other Controls.
-	Window *base_window = get_base_window();
-	if (base_window) {
-		base_window->update_mouse_cursor_state();
+	ERR_MAIN_THREAD_GUARD;
+	ERR_FAIL_COND(!is_inside_tree());
+
+	// Updates need to happen in native Window, because Controls might be hidden behind other Controls or embedded windows.
+	Window *w = get_base_window();
+	while (w->get_embedder()) {
+		w = w->get_embedder()->get_base_window();
 	}
+
+	w->_update_mouse_over();
+	w->_update_cursor_shape();
 }
 
 void Viewport::set_canvas_cull_mask(uint32_t p_canvas_cull_mask) {

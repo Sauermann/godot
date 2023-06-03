@@ -727,23 +727,6 @@ void Window::_event_callback(DisplayServer::WindowEvent p_event) {
 	}
 }
 
-void Window::update_mouse_cursor_state() {
-	ERR_MAIN_THREAD_GUARD;
-	// Update states based on mouse cursor position.
-	// This includes updated mouse_enter or mouse_exit signals or the current mouse cursor shape.
-	// These details are set in Viewport::_gui_input_event. To instantly
-	// see the changes in the viewport, we need to trigger a mouse motion event.
-	// This function should be called whenever scene tree changes affect the mouse cursor.
-	Ref<InputEventMouseMotion> mm;
-	Vector2 pos = get_mouse_position();
-	Transform2D xform = get_global_canvas_transform().affine_inverse();
-	mm.instantiate();
-	mm->set_position(pos);
-	mm->set_global_position(xform.xform(pos));
-	mm->set_device(InputEvent::DEVICE_ID_INTERNAL);
-	push_input(mm);
-}
-
 void Window::show() {
 	ERR_MAIN_THREAD_GUARD;
 	set_visible(true);
@@ -1437,6 +1420,14 @@ bool Window::_can_consume_input_events() const {
 }
 
 void Window::_window_input(const Ref<InputEvent> &p_ev) {
+	_embedded_window_input(p_ev);
+	Ref<InputEventMouseMotion> mm = p_ev;
+	if (mm.is_valid()) {
+		_update_cursor_shape();
+	}
+}
+
+void Window::_embedded_window_input(const Ref<InputEvent> &p_ev) {
 	if (EngineDebugger::is_active()) {
 		// Quit from game window using the stop shortcut (F8 by default).
 		// The custom shortcut is provided via environment variable when running from the editor.

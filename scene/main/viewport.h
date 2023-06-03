@@ -476,6 +476,7 @@ private:
 
 	void _update_mouse_over();
 	void _update_mouse_over(Vector2 p_pos);
+	void _update_cursor_shape();
 
 	virtual bool _can_consume_input_events() const { return true; }
 	uint64_t event_count = 0;
