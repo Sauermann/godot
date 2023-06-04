@@ -3633,15 +3633,28 @@ Transform2D Viewport::get_screen_transform_internal(bool p_absolute_position) co
 void Viewport::update_mouse_cursor_state() {
 	ERR_MAIN_THREAD_GUARD;
 	ERR_FAIL_COND(!is_inside_tree());
+	// Flag the mouse cursor state to be updated during idle time based on mouse cursor position.
+	// This includes updated mouse_enter or mouse_exit signals and the current mouse cursor shape.
 
-	// Updates need to happen in native Window, because Controls might be hidden behind other Controls or embedded windows.
+	// Updates need to happen in native Window, because Controls might be hidden behind other Controls
+	// or embedded windows.
 	Window *w = get_base_window();
 	while (w->get_embedder()) {
 		w = w->get_embedder()->get_base_window();
 	}
 
-	w->_update_mouse_over();
-	w->_update_cursor_shape();
+	if (w->pending_mouse_cursor_state_update) {
+		return;
+	}
+
+	w->pending_mouse_cursor_state_update = true;
+	MessageQueue::get_singleton()->push_callable(callable_mp(Object::cast_to<Viewport>(w), &Viewport::_update_mouse_cursor_state));
+}
+
+void Viewport::_update_mouse_cursor_state() {
+	_update_mouse_over();
+	_update_cursor_shape();
+	pending_mouse_cursor_state_update = false;
 }
 
 void Viewport::set_canvas_cull_mask(uint32_t p_canvas_cull_mask) {

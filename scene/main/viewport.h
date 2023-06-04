@@ -474,6 +474,7 @@ private:
 	bool _sub_windows_forward_input(const Ref<InputEvent> &p_event);
 	SubWindowResize _sub_window_get_resize_margin(Window *p_subwindow, const Point2 &p_point);
 
+	bool pending_mouse_cursor_state_update = false;
 	void _update_mouse_over();
 	void _update_mouse_over(Vector2 p_pos);
 	void _update_cursor_shape();
@@ -491,6 +492,7 @@ protected:
 	bool _is_size_allocated() const;
 
 	void _mouse_leave_viewport();
+	void _update_mouse_cursor_state();
 
 	void _notification(int p_what);
 	void _process_picking();
