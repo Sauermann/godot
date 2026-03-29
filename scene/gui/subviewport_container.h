@@ -62,6 +62,7 @@ public:
 	virtual void gui_input(const Ref<InputEvent> &p_event) override;
 	void set_stretch_shrink(int p_shrink);
 	int get_stretch_shrink() const;
+	Transform2D get_transform_to_child_viewports() const;
 	void recalc_force_viewport_sizes();
 
 	void set_mouse_target(bool p_enable);

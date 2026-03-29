@@ -41,6 +41,7 @@
 #include "scene/2d/camera_2d.h"
 #include "scene/debugger/scene_debugger_object.h"
 #include "scene/gui/popup_menu.h"
+#include "scene/gui/subviewport_container.h"
 #include "scene/main/canvas_layer.h"
 #include "scene/theme/theme_db.h"
 
@@ -379,7 +380,7 @@ void RuntimeNodeSelect::_physics_frame() {
 		return;
 	}
 
-	Window *root = SceneTree::get_singleton()->get_root();
+	Window *root = SceneTree::get_singleton()->get_root(); // TODO: This is likely problematic, when multiple OS-Windows are involved and should be adjusted to support multiple OS-Windows.
 	bool selection_drag_valid = selection_drag_state == SELECTION_DRAG_END && selection_drag_area.get_area() > SELECTION_MIN_AREA;
 	Vector<SelectResult> items;
 
@@ -390,7 +391,7 @@ void RuntimeNodeSelect::_physics_frame() {
 			}
 		} else if (!Math::is_inf(selection_position.x)) {
 			for (int i = 0; i < root->get_child_count(); i++) {
-				_find_canvas_items_at_pos(selection_position, root->get_child(i), items);
+				_find_canvas_items_at_pos(selection_position, root, items);
 			}
 		}
 
@@ -747,7 +748,7 @@ void RuntimeNodeSelect::_update_selection() {
 			continue;
 		}
 
-		Transform2D xform = ci->get_global_transform_with_canvas();
+		Transform2D xform = ci->get_screen_transform();
 
 		// Fallback.
 		Rect2 rect = Rect2(Vector2(), Vector2(10, 10));
@@ -970,45 +971,99 @@ void RuntimeNodeSelect::_set_prefer_group(bool p_enabled) {
 }
 
 // Copied and trimmed from the CanvasItemEditor implementation.
-void RuntimeNodeSelect::_find_canvas_items_at_pos(const Point2 &p_pos, Node *p_node, Vector<SelectResult> &r_items, const Transform2D &p_parent_xform, const Transform2D &p_canvas_xform) {
-	if (!p_node || Object::cast_to<Viewport>(p_node)) {
+void RuntimeNodeSelect::_find_canvas_items_at_pos(const Point2 &p_viewport_pos, Node *p_node, Vector<SelectResult> &r_items, const Transform2D &p_xform) {
+	// p_viewport_pos: Position where to look for canvas items in viewport coordinates of the current viewport
+	// p_node: node, that should be checked, if the node is at p_pos
+	// r_items: editable vector where all canvas items, that are at the location of p_pos, should be inserted
+	// p_xform: transform that should be currently used for the canvas items based on the current canvas layer
+	if (!p_node) {
+		return;
+	}
+	Viewport *vp = Object::cast_to<Viewport>(p_node);
+	if (vp) {
+		if (vp->is_embedding_subwindows()) {
+			// TODO: Handle embedded windows. They should be investigated first, becasue canvas items are not visible below an embedded window.
+			// for each window in vp->get_embedded_subwindows() in order of highest to lowest {
+			//     if p_viewport_pos is inside that window, then {
+			//        loop over all child nodes of window {
+			//           _find_canvas_items_at_pos(converted position relative to window, window, r_items, identity-transform);
+			//        }
+			//        return; // no need to look at other windows or CanvasItems in the current viewport.
+			//     }
+			// }
+		}
+		// Windows don't need to be checked, because they are handled above.
+		// Viewports that are not inside a SubViewportContainer, are not directly displayed and should be ignored.
+		return;
+	}
+
+	CanvasLayer *cl = Object::cast_to<CanvasLayer>(p_node);
+	if (cl) {
+		for (int i = p_node->get_child_count() - 1; i >= 0; i--) {
+			_find_canvas_items_at_pos(p_viewport_pos, p_node->get_child(i), r_items, cl->get_final_transform());
+		}
 		return;
 	}
 
 	CanvasItem *ci = Object::cast_to<CanvasItem>(p_node);
-	for (int i = p_node->get_child_count() - 1; i >= 0; i--) {
-		if (ci) {
-			if (!ci->is_set_as_top_level()) {
-				_find_canvas_items_at_pos(p_pos, p_node->get_child(i), r_items, p_parent_xform * ci->get_transform(), p_canvas_xform);
-			} else {
-				_find_canvas_items_at_pos(p_pos, p_node->get_child(i), r_items, ci->get_transform(), p_canvas_xform);
-			}
-		} else {
-			CanvasLayer *cl = Object::cast_to<CanvasLayer>(p_node);
-			_find_canvas_items_at_pos(p_pos, p_node->get_child(i), r_items, Transform2D(), cl ? cl->get_transform() : p_canvas_xform);
+	if (!ci) {
+		for (int i = p_node->get_child_count() - 1; i >= 0; i--) {
+			// TODO: Check if non-canvas-items reset the transform of other children. Make according adjustments to p_xform in the next line.
+			_find_canvas_items_at_pos(p_viewport_pos, p_node->get_child(i), r_items, p_xform);
 		}
-	}
-
-	if (!ci || !ci->is_visible_in_tree()) {
 		return;
 	}
 
-	Transform2D xform = p_canvas_xform;
-	if (!ci->is_set_as_top_level()) {
-		xform *= p_parent_xform;
-	}
+	// Now ci is a CanvasItem.
 
-	Window *root = SceneTree::get_singleton()->get_root();
-	Point2 pos;
-
-	// Cameras don't affect `CanvasLayer`s.
-	if (!ci->get_canvas_layer_node() || ci->get_canvas_layer_node()->is_following_viewport()) {
-		pos = root->get_canvas_transform().affine_inverse().xform(p_pos);
+	Transform2D xform;
+	if (ci->is_set_as_top_level()) { // TODO: Can this be simplified without this if statement?
+		// For toplefel, get the complete transform.
+		xform = ci->get_global_transform_with_canvas();
 	} else {
-		pos = p_pos;
+		// xform is equal to ci->get_global_transform_with_canvas().
+		xform = p_xform * ci->get_transform();
+	}
+	// Now xform contains a transform between the viewport coordinate system and the local coordinate system.
+
+	for (int i = p_node->get_child_count() - 1; i >= 0; i--) {
+		_find_canvas_items_at_pos(p_viewport_pos, p_node->get_child(i), r_items, xform);
 	}
 
-	xform = (xform * ci->get_transform()).affine_inverse();
+	if (!ci->is_visible()) {
+		// It is intentional, that this is checked after handling the children,
+		// because even if ci is hidden, the children can be displayed.
+		return;
+	}
+
+	SubViewportContainer *svc = Object::cast_to<SubViewportContainer>(p_node);
+	if (svc) {
+		// p_viewport_pos is in the viewports embedder coordinate system.
+		Transform2D matrix = xform;
+		matrix.affine_invert();
+		if (!svc->has_point(matrix.xform(p_viewport_pos))) {
+			return;
+		}
+		Transform2D embedder_xform = xform * svc->get_transform_to_child_viewports();
+		
+		for (int i = 0; i < svc->get_child_count(); i++) {
+			SubViewport *v = Object::cast_to<SubViewport>(svc->get_child(i));
+			if (!v) {
+				// Handly only SubViewport Child nodes. Other CanvasItem nodes are handled via the above `_find_canvas_items_at_pos`.
+				continue;
+			}
+			matrix = embedder_xform * v->get_final_transform();
+			matrix.affine_invert();
+			// matrix.xform(p_viewport_pos) converts p_viewport_pos into the viewport coordinate system of the SubViewport.
+			Point2 pos = matrix.xform(p_viewport_pos);
+			// Investigate all nodes inside that viewport
+			for (int i = 0; i < v->get_child_count(); i++) {
+				_find_canvas_items_at_pos(pos, v->get_child(i), r_items);
+			}
+		}
+	}
+
+	// I didn't adjust the code below yet.
 	const real_t local_grab_distance = xform.basis_xform(Vector2(sel_2d_grab_dist, 0)).length() / view_2d_zoom;
 	if (ci->_edit_is_selected_on_click(xform.xform(pos), local_grab_distance)) {
 		SelectResult res;
@@ -1034,21 +1089,35 @@ void RuntimeNodeSelect::_find_canvas_items_at_pos(const Point2 &p_pos, Node *p_n
 
 // Copied and trimmed from the CanvasItemEditor implementation.
 void RuntimeNodeSelect::_find_canvas_items_at_rect(const Rect2 &p_rect, Node *p_node, Vector<SelectResult> &r_items, const Transform2D &p_parent_xform, const Transform2D &p_canvas_xform) {
-	if (!p_node || Object::cast_to<Viewport>(p_node)) {
+	if (!p_node || Object::cast_to<Window>(p_node)) {
 		return;
 	}
 
 	CanvasItem *ci = Object::cast_to<CanvasItem>(p_node);
+	Transform2D xform = p_canvas_xform;
+
+	if (CanvasLayer *cl = Object::cast_to<CanvasLayer>(p_node)) {
+		xform = cl->get_transform();
+	} else if (Viewport *vp = Object::cast_to<Viewport>(p_node)) {
+		if (!vp->is_visible_subviewport()) {
+			return;
+		}
+		xform = vp->get_popup_base_transform();
+		if (!vp->get_visible_rect().intersects(xform.affine_inverse().xform(p_rect))) {
+			return;
+		}
+	}
+
 	for (int i = p_node->get_child_count() - 1; i >= 0; i--) {
 		if (ci) {
 			if (!ci->is_set_as_top_level()) {
-				_find_canvas_items_at_rect(p_rect, p_node->get_child(i), r_items, p_parent_xform * ci->get_transform(), p_canvas_xform);
+				_find_canvas_items_at_rect(p_rect, p_node->get_child(i), r_items, p_parent_xform * ci->get_transform(), xform);
 			} else {
-				_find_canvas_items_at_rect(p_rect, p_node->get_child(i), r_items, ci->get_transform(), p_canvas_xform);
+				_find_canvas_items_at_rect(p_rect, p_node->get_child(i), r_items, ci->get_transform(), xform);
 			}
 		} else {
 			CanvasLayer *cl = Object::cast_to<CanvasLayer>(p_node);
-			_find_canvas_items_at_rect(p_rect, p_node->get_child(i), r_items, Transform2D(), cl ? cl->get_transform() : p_canvas_xform);
+			_find_canvas_items_at_rect(p_rect, p_node->get_child(i), r_items, Transform2D(), cl ? cl->get_transform() : xform);
 		}
 	}
 
@@ -1056,18 +1125,15 @@ void RuntimeNodeSelect::_find_canvas_items_at_rect(const Rect2 &p_rect, Node *p_
 		return;
 	}
 
-	Transform2D xform = p_canvas_xform;
 	if (!ci->is_set_as_top_level()) {
 		xform *= p_parent_xform;
 	}
 
-	Window *root = SceneTree::get_singleton()->get_root();
-	Rect2 rect;
+	Rect2 rect = p_rect;
 	// Cameras don't affect `CanvasLayer`s.
 	if (!ci->get_canvas_layer_node() || ci->get_canvas_layer_node()->is_following_viewport()) {
-		rect = root->get_canvas_transform().affine_inverse().xform(p_rect);
-	} else {
-		rect = p_rect;
+		Viewport *vp = ci->get_viewport();
+		rect = vp->get_canvas_transform().affine_inverse().xform(p_rect);
 	}
 	rect = (xform * ci->get_transform()).affine_inverse().xform(rect);
 

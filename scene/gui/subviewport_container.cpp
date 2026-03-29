@@ -246,6 +246,17 @@ bool SubViewportContainer::_is_propagated_in_gui_input(const Ref<InputEvent> &p_
 	return false;
 }
 
+Transform2D SubViewportContainer::get_transform_to_child_viewports() const {
+	// Return a transform between item coordinates of the SubViewportContainer and the Embedder Coordinates of the embedded viewports.
+	if (stretch && shrink > 1) {
+		Transform2D xform;
+		xform.scale(Vector2(1, 1) / shrink);
+		return xform;
+	} else {
+		return Transform2D();
+	}
+}
+
 void SubViewportContainer::set_mouse_target(bool p_enable) {
 	mouse_target = p_enable;
 }
